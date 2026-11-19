@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.db import connect
+from app.modules import burst_dedupe_window as burst
 from app.seed import idle_timeout_sec
 from app.services import ingest as ingest_svc
 from app.services import sessions as sess_svc
@@ -19,7 +20,12 @@ def overview():
                 "SELECT COUNT(*) AS c FROM hits WHERE channel='primary'"
             ).fetchone()["c"],
             "quarantine": conn.execute("SELECT COUNT(*) AS c FROM quarantine").fetchone()["c"],
+            "burst_held": conn.execute(
+                "SELECT COUNT(*) AS c FROM quarantine WHERE reason IN (?, ?)",
+                (burst.REASON_DUPLICATE, burst.REASON_UNVERIFIABLE),
+            ).fetchone()["c"],
             "idle_timeout_sec": idle_timeout_sec(conn),
+            "burst_window_sec": burst.burst_window_sec(conn),
         }
     finally:
         conn.close()
@@ -71,8 +77,9 @@ def list_quarantine():
 
 
 @router.post("/ingest/run")
-def run_ingest():
-    return ingest_svc.run_batch()
+def run_ingest(body: dict | None = None):
+    """省略 body 时读夹具 ``ingest_batch.json``。"""
+    return ingest_svc.run_batch(body)
 
 
 @router.get("/session-proofs")
@@ -97,7 +104,11 @@ def session_proofs(session_id: str | None = None):
 def get_settings():
     conn = connect()
     try:
-        return {"idle_timeout_sec": idle_timeout_sec(conn)}
+        return {
+            "idle_timeout_sec": idle_timeout_sec(conn),
+            "burst_window_sec": burst.burst_window_sec(conn),
+            "burst_window_config_form": burst.WINDOW_CONFIG_FORM,
+        }
     finally:
         conn.close()
 
@@ -115,5 +126,50 @@ def put_idle_timeout(body: dict):
         )
         conn.commit()
         return {"idle_timeout_sec": sec}
+    finally:
+        conn.close()
+
+
+@router.put("/settings/burst-window")
+def put_burst_window(body: dict):
+    conn = connect()
+    try:
+        try:
+            sec = burst.set_burst_window_sec(conn, body.get("burst_window_sec"))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, f"突发窗秒非法: {exc}")
+        conn.commit()
+        return {
+            "burst_window_sec": sec,
+            "burst_window_config_form": burst.WINDOW_CONFIG_FORM,
+        }
+    finally:
+        conn.close()
+
+
+@router.get("/burst-dedupe/proof")
+def burst_dedupe_proof(visitor_id: str | None = None):
+    """突发去重核证：只读，不写库。
+
+    协同：收流正式集 / 搁置重复集 / 会话末击点时钟 / hit_count。
+    """
+    conn = connect()
+    try:
+        return burst.proof(conn, visitor_id=visitor_id)
+    finally:
+        conn.close()
+
+
+@router.get("/burst-dedupe/config")
+def burst_dedupe_config():
+    conn = connect()
+    try:
+        return {
+            "burst_window_sec": burst.burst_window_sec(conn),
+            "config_key": burst.SETTINGS_KEY,
+            "window_config_form": burst.WINDOW_CONFIG_FORM,
+            "approach": burst.APPROACH,
+            "status": burst.STATUS,
+        }
     finally:
         conn.close()

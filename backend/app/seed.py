@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS hits (
   page_path TEXT NOT NULL,
   event_name TEXT NOT NULL,
   channel TEXT NOT NULL DEFAULT 'primary',
+  dedupe_window_sec INTEGER,
   UNIQUE(visitor_id, event_ts, page_path, event_name)
 );
 
@@ -58,23 +59,45 @@ CREATE TABLE IF NOT EXISTS session_proofs (
   ended_at TEXT,
   created_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_hits_dedupe_key
+  ON hits(visitor_id, page_path, event_name, event_ts);
+
+CREATE INDEX IF NOT EXISTS idx_hits_session
+  ON hits(session_id, channel);
 """
+
+DEFAULT_BURST_WINDOW_SEC = "60"
 
 
 def init_db():
     conn = connect()
     conn.executescript(SCHEMA)
+    _migrate(conn)
     row = conn.execute("SELECT value FROM settings WHERE key='idle_timeout_sec'").fetchone()
     if not row:
         conn.execute(
             "INSERT INTO settings(key, value) VALUES ('idle_timeout_sec', ?)",
             ("1800",),
         )
+    row = conn.execute("SELECT value FROM settings WHERE key='burst_window_sec'").fetchone()
+    if not row:
+        conn.execute(
+            "INSERT INTO settings(key, value) VALUES ('burst_window_sec', ?)",
+            (DEFAULT_BURST_WINDOW_SEC,),
+        )
     n = conn.execute("SELECT COUNT(*) AS c FROM visitors").fetchone()["c"]
     if n == 0:
         _seed_fixtures(conn)
     conn.commit()
     conn.close()
+
+
+def _migrate(conn):
+    """已有库补列：为旧库的 hits 表加窗秒快照列（只作审计，不追溯回填）。"""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(hits)").fetchall()}
+    if "dedupe_window_sec" not in cols:
+        conn.execute("ALTER TABLE hits ADD COLUMN dedupe_window_sec INTEGER")
 
 
 def _seed_fixtures(conn):

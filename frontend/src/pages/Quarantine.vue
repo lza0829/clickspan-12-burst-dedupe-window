@@ -17,7 +17,10 @@ onMounted(async () => {
 <template>
   <section class="panel">
     <h1>搁置区</h1>
-    <p class="muted">脏击点 / 冲突组搁置落库后在此可见（功能题填充）。</p>
+    <p class="muted">
+      脏击点 / 冲突组 / 突发窗内重复搁置落库后在此可见。
+      突发去重记录 reason 为 burst_window_dup（去重引用见成员 JSON）。
+    </p>
     <p v-if="err" class="err">{{ err }}</p>
     <p v-if="!rows.length" class="muted">暂无搁置记录。</p>
     <table v-else class="data">
@@ -28,7 +31,7 @@ onMounted(async () => {
         <tr v-for="r in rows" :key="r.id">
           <td>{{ r.id }}</td>
           <td>{{ r.visitor_id }}</td>
-          <td>{{ r.reason }}</td>
+          <td><span class="chip" :class="r.reason.startsWith('burst_window') ? 'held' : ''">{{ r.reason }}</span></td>
           <td class="mono">{{ r.member_json }}</td>
           <td class="mono">{{ r.created_at }}</td>
         </tr>

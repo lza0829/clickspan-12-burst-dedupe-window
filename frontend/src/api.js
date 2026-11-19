@@ -22,4 +22,11 @@ export const api = {
   proofs: (sessionId) =>
     req(sessionId ? `/api/session-proofs?session_id=${encodeURIComponent(sessionId)}` : '/api/session-proofs'),
   settings: () => req('/api/settings'),
+  burstConfig: () => req('/api/burst-dedupe/config'),
+  burstProof: (visitorId) =>
+    req(
+      visitorId
+        ? `/api/burst-dedupe/proof?visitor_id=${encodeURIComponent(visitorId)}`
+        : '/api/burst-dedupe/proof',
+    ),
 }

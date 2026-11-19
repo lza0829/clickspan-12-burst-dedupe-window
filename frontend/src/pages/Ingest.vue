@@ -23,7 +23,10 @@ async function run() {
 <template>
   <section class="panel">
     <h1>收流击点</h1>
-    <p class="muted">读取夹具 ingest_batch.json，灌入正式通道（基座不做空闲切窗）。</p>
+    <p class="muted">
+      读取夹具 ingest_batch.json，按突发窗去重分流后灌入正式通道：
+      窗内同键重复进搁置，不更新末击点、不改 hit_count。
+    </p>
     <button class="btn" :disabled="busy" @click="run">{{ busy ? '收流中…' : '跑一批收流' }}</button>
     <p v-if="err" class="err">{{ err }}</p>
     <pre v-if="result" class="mono">{{ result }}</pre>

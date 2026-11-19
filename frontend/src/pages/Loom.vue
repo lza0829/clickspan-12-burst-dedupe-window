@@ -32,13 +32,18 @@ onMounted(load)
       <div class="stat"><b>{{ overview.sessions }}</b><span>会话</span></div>
       <div class="stat"><b>{{ overview.hits_primary }}</b><span>正式击点</span></div>
       <div class="stat"><b>{{ overview.quarantine }}</b><span>隔离</span></div>
+      <div class="stat"><b>{{ overview.burst_held }}</b><span>突发去重</span></div>
       <div class="stat"><b>{{ overview.idle_timeout_sec }}s</b><span>空闲超时</span></div>
+      <div class="stat"><b>{{ overview.burst_window_sec }}s</b><span>突发窗</span></div>
     </div>
     <p v-if="err" class="err">{{ err }}</p>
 
     <section class="panel">
       <h1>会话织机</h1>
-      <p class="muted">基座按访客整段挂会话；空闲切窗由空桩功能题实现。</p>
+      <p class="muted">
+        基座按访客整段挂会话；空闲切窗由空桩功能题实现。
+        窗内同键连点只留首条进正式，余者进搁置（核证页可见）。
+      </p>
       <div class="lane-list">
         <article v-for="s in sessions" :key="s.id" class="lane">
           <div class="lane-head">
